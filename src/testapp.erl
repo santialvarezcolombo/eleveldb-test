@@ -8,7 +8,10 @@
     order_dict_example/0,
     test_double_open/0,
     concurrent_read/0,
-    read_randomly_n_times/1]).
+    read_randomly_n_times/1,
+    ets_concurrent_reads/0,
+    insert_n_keys_ets/1,
+    read_sec_ets/1]).
 
 %% Insert Number keys (0, Number] with the same value
 insertKeys(Number) ->
@@ -142,3 +145,36 @@ read_rec(Ref, N) ->
     read_rec(Ref, N - 1).
 
 
+%%%%%%%% Methods to compare ETS to levelDB
+insert_n_keys_ets(N) ->
+    ets:new(test, [set, protected, named_table, {read_concurrency, true}]),
+    insert_rec_ets(test, N).
+
+insert_rec_ets(_Name, 0) ->
+    ok;
+insert_rec_ets(Name, N) ->
+    ets:insert(Name, {pepe, N}),
+    insert_rec_ets(Name, N - 1).
+
+ets_concurrent_reads() ->
+    spawn(testapp, read_randomly_n_times_ets, [test, 100000, self(), 0]),
+    spawn(testapp, read_randomly_n_times_ets, [test, 100000, self(), 2500]),
+    spawn(testapp, read_randomly_n_times_ets, [test, 100000, self(), 5000]),
+    spawn(testapp, read_randomly_n_times_ets, [test, 100000, self(), 7500]),
+    wait_for_termination(4).
+
+read_randomly_n_times_ets(_Name, 0, ParentRef, _Off) ->
+    ParentRef ! finished;
+read_randomly_n_times_ets(Name, N, ParentRef, Off) ->
+    Rand = Off + random:uniform(2500),
+    ets:lookup(Name, Rand),
+    read_randomly_n_times_ets(Name, N - 1, ParentRef, Off).
+
+read_sec_ets(0) ->
+    ok;
+read_sec_ets(N) ->
+    Rand = random:uniform(10000),
+    ets:lookup(Rand, Rand),
+    read_sec_ets(N - 1).
+
+%%%%%%%%
