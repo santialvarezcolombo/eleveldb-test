@@ -1,0 +1,13 @@
+{application, testapp,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  eleveldb
+                 ]},
+  {mod, { eleveltestapp_app, []}},
+  {env, []}
+ ]}.
