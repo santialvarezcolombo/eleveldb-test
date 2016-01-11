@@ -6,7 +6,9 @@
     iteratorAdvance/1,
     fold_example/0,
     order_dict_example/0,
-    test_double_open/0]).
+    test_double_open/0,
+    concurrent_read/0,
+    read_randomly_n_times/1]).
 
 %% Insert Number keys (0, Number] with the same value
 insertKeys(Number) ->
@@ -97,3 +99,46 @@ test_double_open() ->
     {ok, Ref1} = eleveldb:open("testDB", [{create_if_missing, true}]),
     eleveldb:close(Ref),
     eleveldb:close(Ref1).
+
+
+%% create 4 threads each reading 100000 times 25% of the key space
+concurrent_read() ->
+    {ok, Ref} = eleveldb:open("testDB", [{create_if_missing, true}]),
+    spawn(testapp, read_randomly_n_times_ref, [Ref, 100000, self(), 0]),
+    spawn(testapp, read_randomly_n_times_ref, [Ref, 100000, self(), 2500]),
+    spawn(testapp, read_randomly_n_times_ref, [Ref, 100000, self(), 5000]),
+    spawn(testapp, read_randomly_n_times_ref, [Ref, 100000, self(), 7500]),
+    wait_for_termination(4),
+    eleveldb:close(Ref).
+
+read_randomly_n_times_ref(_Ref, 0, ParentRef, _Off) ->
+    ParentRef ! finished;
+read_randomly_n_times_ref(Ref, N, ParentRef, Off) ->
+    Rand = Off + random:uniform(2500),
+    Binary = integer_to_binary(Rand),
+    eleveldb:get(Ref, Binary, []),
+    read_randomly_n_times_ref(Ref, N - 1, ParentRef, Off).
+
+wait_for_termination(0) ->
+    ok;
+wait_for_termination(Threads) ->
+    receive
+        finished ->
+            wait_for_termination(Threads - 1)
+    end.
+
+%% Reads randomly N times from the keys in the DB
+read_randomly_n_times(N) ->
+    {ok, Ref} = eleveldb:open("testDB", [{create_if_missing, true}]),
+    ok = read_rec(Ref, N),
+    eleveldb:close(Ref).
+
+read_rec(_Ref, 0) ->
+    ok;
+read_rec(Ref, N) ->
+    Rand = random:uniform(10000),
+    Binary = integer_to_binary(Rand),
+    eleveldb:get(Ref, Binary, []),
+    read_rec(Ref, N - 1).
+
+
