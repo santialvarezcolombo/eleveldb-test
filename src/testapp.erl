@@ -11,7 +11,9 @@
     read_randomly_n_times/1,
     ets_concurrent_reads/0,
     insert_n_keys_ets/1,
-    read_sec_ets/1]).
+    read_sec_ets/1,
+    check_iterator_order_complex_key/0,
+    check_iterator_order/0]).
 
 %% Insert Number keys (0, Number] with the same value
 insertKeys(Number) ->
@@ -178,3 +180,73 @@ read_sec_ets(N) ->
     read_sec_ets(N - 1).
 
 %%%%%%%%
+
+
+check_iterator_order() ->
+    {ok, Ref} = eleveldb:open("check_iterator_order_DB", [{create_if_missing, true}]),
+    eleveldb:put(Ref, term_to_binary({1, 1}), term_to_binary(1), []),
+    eleveldb:put(Ref, term_to_binary({1, 2}), term_to_binary(1), []),
+    eleveldb:put(Ref, term_to_binary({2, 1}), term_to_binary(2), []),
+    eleveldb:put(Ref, term_to_binary({3, 1}), term_to_binary(3), []),
+    eleveldb:put(Ref, term_to_binary({4, 1}), term_to_binary(4), []),
+    eleveldb:put(Ref, term_to_binary({5, 1}), term_to_binary(5), []),
+    eleveldb:put(Ref, term_to_binary({2, 2}), term_to_binary(2), []),
+    eleveldb:put(Ref, term_to_binary({3, 4}), term_to_binary(3), []),
+    eleveldb:put(Ref, term_to_binary({1, 4}), term_to_binary(1), []),
+    eleveldb:put(Ref, term_to_binary({2, 3}), term_to_binary(2), []),
+
+    %% iterate the 3 keys that start with two
+    try
+        eleveldb:fold(Ref,
+            fun({K, V}, AccIn) ->
+                case AccIn of
+                    0 ->
+                        throw({break, AccIn});
+                    _ ->
+                        io:format("~p : ~p ~n", [binary_to_term(K), binary_to_term(V)]),
+                        AccIn - 1
+                end
+            end,
+            3,
+            [{first_key, term_to_binary({2, 1})}])
+    catch
+        {break, 0} ->
+            ok
+    end,
+    eleveldb:close(Ref),
+    eleveldb:destroy("check_iterator_order_DB", []).
+
+
+check_iterator_order_complex_key() ->
+    {ok, Ref} = eleveldb:open("check_iterator_order_complex_key_DB", [{create_if_missing, true}]),
+    eleveldb:put(Ref, term_to_binary({1, {1, [1, 2, 3]}}), term_to_binary(1), []),
+    eleveldb:put(Ref, term_to_binary({1, {2, [1, 2, 3]}}), term_to_binary(1), []),
+    eleveldb:put(Ref, term_to_binary({2, {1, [1, 3, 3]}}), term_to_binary(2), []),
+    eleveldb:put(Ref, term_to_binary({3, {1, [1, 2, 3]}}), term_to_binary(3), []),
+    eleveldb:put(Ref, term_to_binary({4, {1, [1, 2, 3]}}), term_to_binary(4), []),
+    eleveldb:put(Ref, term_to_binary({5, {1, [1, 2, 3]}}), term_to_binary(5), []),
+    eleveldb:put(Ref, term_to_binary({2, {2, [4, 2, 3]}}), term_to_binary(2), []),
+    eleveldb:put(Ref, term_to_binary({3, {4, [1, 2, 3]}}), term_to_binary(3), []),
+    eleveldb:put(Ref, term_to_binary({1, {4, [1, 2, 3]}}), term_to_binary(1), []),
+    eleveldb:put(Ref, term_to_binary({2, {3, [1, 9, 3]}}), term_to_binary(2), []),
+
+    %% iterate the 3 keys that start with two
+    try
+        eleveldb:fold(Ref,
+            fun({K, V}, AccIn) ->
+                case AccIn of
+                    0 ->
+                        throw({break, AccIn});
+                    _ ->
+                        io:format("~p : ~p ~n", [binary_to_term(K), binary_to_term(V)]),
+                        AccIn - 1
+                end
+            end,
+            3,
+            [{first_key, term_to_binary({2, 1})}])
+    catch
+        {break, 0} ->
+            ok
+    end,
+    eleveldb:close(Ref),
+    eleveldb:destroy("check_iterator_order_complex_key_DB", []).
